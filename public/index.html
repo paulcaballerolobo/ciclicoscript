@@ -155,6 +155,33 @@
   .hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 12px; border-left: 2px solid var(--border); padding-left: 12px; }
   .hint code { font-family: var(--mono); font-size: 11px; background: var(--bg-card2); padding: 1px 5px; border-radius: 4px; }
 
+  /* calendario */
+  .repeat-toggle { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .repeat-toggle input { width: auto; }
+  .sched-grid { display: flex; flex-direction: column; gap: 8px; }
+  .sched-day {
+    display: grid; grid-template-columns: 70px 130px 1fr; gap: 12px; align-items: center;
+    background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+  }
+  .sched-day .dname { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 14px; }
+  .sched-day select { width: 100%; }
+  .pool-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .pool-type { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .pool-type button {
+    background: none; border: none; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
+    padding: 7px 12px; cursor: pointer; transition: all 0.15s;
+  }
+  .pool-type button + button { border-left: 1px solid var(--border); }
+  .pool-type button.on { background: var(--orange); color: #fff; }
+  .chip {
+    font-size: 11px; padding: 5px 10px; border-radius: 16px; border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer; transition: all 0.15s; background: var(--bg-card);
+  }
+  .chip.on { border-color: var(--orange); color: var(--orange-ink); background: color-mix(in srgb, var(--orange) 12%, transparent); }
+  .chips-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+  @media (max-width: 640px) { .sched-day { grid-template-columns: 1fr; gap: 8px; } }
+  .hint code { font-family: var(--mono); font-size: 11px; background: var(--bg-card2); padding: 1px 5px; border-radius: 4px; }
+
   .login-wrap { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
   .login-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 40px; width: 100%; max-width: 380px; box-shadow: var(--shadow); }
   .login-card h2 { margin: 0 0 8px; font-size: 24px; }
@@ -222,8 +249,26 @@
     <div class="console" id="console"></div>
 
     <div class="hint">
-      El rotador elige la <strong>siguiente</strong> imagen del set (orden alfabético, circular) y la pone
-      como banner del canal. El cron solo corre si <code>ROTATOR_ENABLED=true</code>.
+      El banner se elige según el <strong>calendario</strong> de abajo, según el día (hora Argentina).
+      El cron corre cada 2&nbsp;horas y solo actúa si <code>ROTATOR_ENABLED=true</code>.
+    </div>
+  </div>
+
+  <!-- CALENDARIO DE ROTACIÓN -->
+  <div class="panel hidden" id="schedulePanel">
+    <div class="panel-head">
+      <h3>Calendario de rotación</h3>
+      <span class="badge" id="tzBadge">America/Argentina/Buenos_Aires</span>
+      <div class="actions">
+        <label class="repeat-toggle"><input type="checkbox" id="avoidRepeat" /> No repetir seguido</label>
+        <button class="btn-primary" id="saveSchedule">Guardar calendario</button>
+      </div>
+    </div>
+    <div class="sched-grid" id="schedGrid"></div>
+    <div class="hint">
+      <strong>Fijo</strong>: siempre la 1ª del grupo &middot; <strong>Secuencial</strong>: se turnan en orden &middot;
+      <strong>Random</strong>: al azar del grupo. Grupo: <strong>Todas</strong>, <strong>Resto</strong>
+      (las no asignadas a otro día) o imágenes específicas.
     </div>
   </div>
 </div>
@@ -291,9 +336,105 @@
 
   function openRotator() {
     $("rotatorPanel").classList.remove("hidden");
+    $("schedulePanel").classList.remove("hidden");
     $("rotatorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-    loadImages();
+    loadImages().then(loadSchedule);
   }
+
+  /* ---- calendario ---- */
+  const DAYS = [["mon","Lun"],["tue","Mar"],["wed","Mié"],["thu","Jue"],["fri","Vie"],["sat","Sáb"],["sun","Dom"]];
+  let schedState = null;
+  let schedImages = [];
+
+  function shortName(name) {
+    return name.replace(/-?banner.*$/i, "").replace(/\.(jpe?g|png|gif|bmp)$/i, "").replace(/[-_]+$/,"") || name;
+  }
+
+  async function loadSchedule() {
+    const res = await api("/api/rotator/schedule");
+    schedState = (await res.json()).schedule;
+    const imgRes = await api("/api/rotator/images");
+    schedImages = (await imgRes.json()).images;
+    $("avoidRepeat").checked = !!schedState.avoidRepeat;
+    $("tzBadge").textContent = schedState.timezone;
+    renderSchedule();
+  }
+
+  function renderSchedule() {
+    const grid = $("schedGrid");
+    grid.innerHTML = "";
+    DAYS.forEach(([key, label]) => {
+      if (!schedState.days[key]) schedState.days[key] = { mode: "random", pool: "all" };
+      const day = schedState.days[key];
+      const poolType = Array.isArray(day.pool) ? "specific" : day.pool;
+      const row = document.createElement("div");
+      row.className = "sched-day";
+      row.innerHTML = `
+        <div class="dname">${label}</div>
+        <select class="mode-sel">
+          <option value="fixed">Fijo</option>
+          <option value="sequential">Secuencial</option>
+          <option value="random">Random</option>
+        </select>
+        <div class="pool-wrap">
+          <div class="pool-type">
+            <button data-t="all">Todas</button>
+            <button data-t="rest">Resto</button>
+            <button data-t="specific">Específicas</button>
+          </div>
+          <div class="chips-wrap"></div>
+        </div>`;
+      grid.appendChild(row);
+
+      const modeSel = row.querySelector(".mode-sel");
+      modeSel.value = day.mode;
+      modeSel.onchange = (e) => { day.mode = e.target.value; };
+
+      const ptBtns = row.querySelectorAll(".pool-type button");
+      ptBtns.forEach((b) => {
+        if (b.dataset.t === poolType) b.classList.add("on");
+        b.onclick = () => {
+          ptBtns.forEach((x) => x.classList.remove("on"));
+          b.classList.add("on");
+          if (b.dataset.t === "all") day.pool = "all";
+          else if (b.dataset.t === "rest") day.pool = "rest";
+          else if (!Array.isArray(day.pool)) day.pool = [];
+          renderChips(key, row);
+        };
+      });
+      renderChips(key, row);
+    });
+  }
+
+  function renderChips(key, row) {
+    const wrap = row.querySelector(".chips-wrap");
+    const pool = schedState.days[key].pool;
+    wrap.innerHTML = "";
+    if (!Array.isArray(pool)) return;
+    schedImages.forEach((name) => {
+      const chip = document.createElement("span");
+      chip.className = "chip" + (pool.includes(name) ? " on" : "");
+      chip.textContent = shortName(name);
+      chip.title = name;
+      chip.onclick = () => {
+        const arr = schedState.days[key].pool;
+        const i = arr.indexOf(name);
+        if (i >= 0) arr.splice(i, 1); else arr.push(name);
+        chip.classList.toggle("on");
+      };
+      wrap.appendChild(chip);
+    });
+  }
+
+  $("saveSchedule").onclick = async () => {
+    if (!schedState) return;
+    schedState.avoidRepeat = $("avoidRepeat").checked;
+    const res = await api("/api/rotator/schedule", {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(schedState),
+    });
+    const d = await res.json();
+    logLine(d.ok ? "✓ Calendario guardado." : ("Error: " + d.error), d.ok ? "ok" : "err");
+  };
 
   async function loadImages() {
     const res = await api("/api/rotator/images");

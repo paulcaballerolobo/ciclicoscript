@@ -1,6 +1,12 @@
 import type { Env } from "./types";
 import { SCRIPTS, getScript } from "./scripts/registry";
-import { BANNER_PREFIX, listBannerImages } from "./scripts/banner-rotator";
+import {
+  BANNER_PREFIX,
+  listBannerImages,
+  getSchedule,
+  saveSchedule,
+} from "./scripts/banner-rotator";
+import type { Schedule } from "./types";
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -61,6 +67,21 @@ async function handleApi(req: Request, env: Env, ctx: ExecutionContext): Promise
   }
 
   /* ---- gestión de imágenes del rotador ---- */
+
+  // Leer el calendario de rotación.
+  if (path === "/api/rotator/schedule" && req.method === "GET") {
+    return json({ ok: true, schedule: await getSchedule(env) });
+  }
+
+  // Guardar el calendario de rotación.
+  if (path === "/api/rotator/schedule" && req.method === "PUT") {
+    const schedule = (await req.json()) as Schedule;
+    if (!schedule || typeof schedule !== "object" || !schedule.days) {
+      return json({ ok: false, error: "Calendario inválido." }, 400);
+    }
+    await saveSchedule(env, schedule);
+    return json({ ok: true });
+  }
 
   // Listar imágenes.
   if (path === "/api/rotator/images" && req.method === "GET") {

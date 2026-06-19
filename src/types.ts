@@ -26,6 +26,24 @@ export interface ScriptResult {
   finishedAt: string;
 }
 
+/* ----------------------------- rotador ----------------------------- */
+
+export type DayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
+export type RotateMode = "fixed" | "sequential" | "random";
+/** Grupo de imágenes: lista de substrings de nombre, o palabra clave. */
+export type PoolSpec = string[] | "all" | "rest";
+
+export interface ScheduleDay {
+  mode: RotateMode;
+  pool: PoolSpec;
+}
+
+export interface Schedule {
+  timezone: string;
+  avoidRepeat: boolean;
+  days: Record<DayKey, ScheduleDay>;
+}
+
 /** Metadatos + handler de un script ejecutable desde el dashboard. */
 export interface ScriptDef {
   id: string;
