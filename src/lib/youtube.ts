@@ -38,12 +38,32 @@ export async function uploadBanner(
   return data.url;
 }
 
-/** Paso 2: aplica la bannerExternalUrl al canal. */
+/**
+ * Paso 2: aplica la bannerExternalUrl al canal.
+ *
+ * channels.update con part=brandingSettings REEMPLAZA todo el objeto: si se
+ * envía solo `image`, la API responde 400 "Required" y, peor, podría pisar
+ * título/descripción/keywords. Por eso primero leemos los brandingSettings
+ * actuales y mergeamos únicamente la imagen, preservando el resto.
+ */
 export async function applyBanner(
   accessToken: string,
   channelId: string,
   bannerExternalUrl: string
 ): Promise<void> {
+  // Leer la configuración actual del canal.
+  const getRes = await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=brandingSettings&id=${channelId}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!getRes.ok) {
+    throw new Error(`channels.list (brandingSettings) falló (${getRes.status}): ${await getRes.text()}`);
+  }
+  const data = (await getRes.json()) as {
+    items?: Array<{ brandingSettings?: { channel?: unknown; image?: Record<string, unknown> } }>;
+  };
+  const current = data.items?.[0]?.brandingSettings ?? {};
+
   const res = await fetch(
     "https://www.googleapis.com/youtube/v3/channels?part=brandingSettings",
     {
@@ -55,7 +75,10 @@ export async function applyBanner(
       body: JSON.stringify({
         id: channelId,
         brandingSettings: {
-          image: { bannerExternalUrl },
+          // Preservamos el objeto channel tal cual lo devuelve la API.
+          channel: current.channel ?? {},
+          // Mergeamos la nueva imagen sin descartar otros campos de image.
+          image: { ...(current.image ?? {}), bannerExternalUrl },
         },
       }),
     }
