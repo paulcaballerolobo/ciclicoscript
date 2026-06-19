@@ -1,0 +1,13 @@
+# Copiá este archivo como .dev.vars para desarrollo local (`wrangler dev`).
+# En producción estos valores se cargan como secretos con `wrangler secret put`.
+# NUNCA commitees el .dev.vars real.
+
+# Token para entrar al dashboard (inventá uno largo y aleatorio).
+DASH_TOKEN="cambiame-por-un-token-largo-y-aleatorio"
+
+# Credenciales OAuth de Google Cloud (proyecto con YouTube Data API v3 habilitada).
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+
+# Refresh token obtenido una sola vez con el flujo OAuth (ver README).
+GOOGLE_REFRESH_TOKEN=""

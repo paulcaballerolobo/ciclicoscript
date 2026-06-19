@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
+<title>Cíclico · Panel de scripts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Poppins:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --orange:     #FF5500;
+    --orange-ink: #D94400;
+    --orange-dim: #CC4400;
+    --bg:       #FBFAF7;
+    --bg-card:  #FFFFFF;
+    --bg-card2: #F2F0EB;
+    --border:   #E3E0D8;
+    --text:  #16140F;
+    --muted: #6B6760;
+    --green: #1A8F5E;
+    --red:   #D23B3B;
+    --shadow: 0 1px 2px rgba(22,20,15,0.04), 0 4px 16px rgba(22,20,15,0.06);
+    --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --orange:     #FF6A1F;
+      --orange-ink: #FF8A4D;
+      --orange-dim: #E0560F;
+      --bg:       #0E0E0E;
+      --bg-card:  #161616;
+      --bg-card2: #1E1E1E;
+      --border:   #2A2A2A;
+      --text:  #F0EDE8;
+      --muted: #8A857C;
+      --green: #3ECF8E;
+      --red:   #FF5959;
+      --shadow: none;
+    }
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { font-family: 'Poppins', sans-serif; }
+  .display { font-family: 'Anton', sans-serif; text-transform: uppercase; letter-spacing: 0.01em; font-weight: 400; }
+
+  /* nav */
+  nav {
+    padding: 16px 32px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 14px; position: sticky; top: 0; z-index: 100;
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px);
+  }
+  .brand { display: flex; align-items: center; text-decoration: none; color: var(--text); }
+  .logo-img { height: 38px; width: auto; display: block; }
+  /* el logo es negro con fondo transparente: en modo oscuro lo invertimos a blanco */
+  @media (prefers-color-scheme: dark) { .logo-img { filter: invert(1); } }
+  /* fallback textual (Anton, el font del wordmark) mientras no cargue /logo.png */
+  .logo-fallback { font-family: 'Anton', sans-serif; font-size: 24px; text-transform: uppercase; letter-spacing: 0.02em; }
+  .logo-fallback span { color: var(--orange-ink); }
+  nav .tag {
+    font-size: 11px; color: var(--muted); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 500;
+  }
+  nav .tag:first-of-type { margin-left: auto; }
+  nav .tag.logout { cursor: pointer; }
+  nav .tag.logout:hover { border-color: var(--orange); color: var(--orange-ink); }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 56px 32px; }
+
+  .hero-label {
+    font-size: 11px; color: var(--orange-ink); letter-spacing: 0.12em; font-weight: 600;
+    text-transform: uppercase; margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+  }
+  .hero-label::before { content: ''; width: 24px; height: 1px; background: var(--orange); display: inline-block; }
+  h1 { font-weight: 800; font-size: clamp(40px, 6.5vw, 68px); letter-spacing: -0.02em; line-height: 1.02; margin-bottom: 14px; }
+  .subtitle { color: var(--muted); font-size: 16px; max-width: 560px; line-height: 1.65; }
+  h2 { font-weight: 700; font-size: 26px; letter-spacing: -0.01em; margin: 48px 0 18px; }
+
+  /* tarjetas de scripts */
+  .scripts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .script-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px; transition: border-color 0.2s, transform 0.2s; cursor: pointer; box-shadow: var(--shadow);
+  }
+  .script-card:hover, .script-card.active { border-color: var(--orange); }
+  .script-card:hover { transform: translateY(-1px); }
+  .script-card .name { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 18px; margin-bottom: 8px; }
+  .script-card .desc { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+  .badge {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 20px; border: 1px solid var(--border); color: var(--muted);
+  }
+  .badge.cron { color: var(--green); border-color: color-mix(in srgb, var(--green) 40%, transparent); }
+
+  /* botones */
+  .btn-primary {
+    background: var(--orange); color: #fff; border: none; font-family: 'Inter', sans-serif;
+    font-size: 15px; font-weight: 600; padding: 13px 26px; border-radius: 10px; cursor: pointer;
+    letter-spacing: 0.01em; transition: all 0.2s;
+  }
+  .btn-primary:hover { background: var(--orange-dim); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--border); color: var(--text); font-family: 'Inter', sans-serif;
+    font-size: 14px; font-weight: 600; padding: 12px 22px; border-radius: 10px; cursor: pointer; transition: all 0.2s;
+  }
+  .btn-ghost:hover { border-color: var(--orange); color: var(--orange-ink); }
+
+  input[type="text"], input[type="password"] {
+    background: var(--bg-card2); border: 1px solid var(--border); color: var(--text);
+    font-family: 'Inter', sans-serif; font-size: 14px; padding: 12px 14px; border-radius: 8px;
+    width: 100%; outline: none; transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--orange); }
+  ::placeholder { color: var(--muted); }
+
+  /* panel rotador */
+  .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 28px; margin-top: 20px; box-shadow: var(--shadow); }
+  .panel-head { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  .panel-head h3 { font-weight: 700; font-size: 20px; }
+  .panel-head .actions { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  .thumb { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; position: relative; aspect-ratio: 16 / 9; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .meta {
+    position: absolute; bottom: 0; left: 0; right: 0; padding: 8px 10px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff;
+    font-family: var(--mono); font-size: 11px; display: flex; align-items: center; gap: 8px;
+  }
+  .thumb .del {
+    margin-left: auto; cursor: pointer; color: #ddd; border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 6px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; line-height: 1; transition: all 0.2s;
+  }
+  .thumb .del:hover { color: #fff; border-color: var(--red); background: var(--red); }
+  .empty { border: 1px dashed var(--border); border-radius: 10px; padding: 40px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  .drop { border: 1px dashed var(--border); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); font-size: 14px; cursor: pointer; transition: all 0.2s; margin-top: 16px; }
+  .drop:hover, .drop.over { border-color: var(--orange); color: var(--orange-ink); }
+
+  .console {
+    background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+    font-family: var(--mono); font-size: 12px; line-height: 1.7; margin-top: 16px;
+    max-height: 220px; overflow-y: auto; color: var(--muted); white-space: pre-wrap; word-break: break-word;
+  }
+  .console .ok { color: var(--green); }
+  .console .err { color: var(--red); }
+  .console .ts { opacity: 0.6; }
+
+  .hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin-top: 12px; border-left: 2px solid var(--border); padding-left: 12px; }
+  .hint code { font-family: var(--mono); font-size: 11px; background: var(--bg-card2); padding: 1px 5px; border-radius: 4px; }
+
+  .login-wrap { min-height: 70vh; display: flex; align-items: center; justify-content: center; }
+  .login-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 40px; width: 100%; max-width: 380px; box-shadow: var(--shadow); }
+  .login-card h2 { margin: 0 0 8px; font-size: 24px; }
+  .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 22px; line-height: 1.6; }
+  .login-card .btn-primary { width: 100%; margin-top: 14px; }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 640px) {
+    nav { padding: 14px 20px; }
+    .container { padding: 36px 20px; }
+  }
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="/">
+    <img src="/logo.png" alt="Cíclico" class="logo-img" id="logoImg"
+         onerror="this.style.display='none';document.getElementById('logoFallback').style.display='inline'" />
+    <span class="logo-fallback" id="logoFallback" style="display:none">Cí<span>clico</span></span>
+  </a>
+  <div class="tag">Panel de scripts</div>
+  <div class="tag logout hidden" id="logoutBtn">Salir</div>
+</nav>
+
+<!-- LOGIN -->
+<div class="container login-wrap" id="loginView">
+  <div class="login-card">
+    <div class="hero-label">Acceso</div>
+    <h2>Panel de scripts</h2>
+    <p>Ingresá el token de acceso para administrar los scripts de Cíclico.</p>
+    <input type="password" id="tokenInput" placeholder="Token de acceso" />
+    <button class="btn-primary" id="loginBtn">Entrar</button>
+    <div class="console hidden" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div class="container hidden" id="dashView">
+  <div class="hero-label">Automatizaciones</div>
+  <h1>Panel de scripts</h1>
+  <p class="subtitle">Ejecutá y programá las automatizaciones de Cíclico. Elegí un script para ver su panel.</p>
+
+  <h2>Scripts</h2>
+  <div class="scripts-grid" id="scriptsGrid"></div>
+
+  <div class="panel hidden" id="rotatorPanel">
+    <div class="panel-head">
+      <h3>Rotador de banner</h3>
+      <span class="badge cron" id="rotatorCron">cron diario</span>
+      <div class="actions">
+        <button class="btn-ghost" id="refreshBtn">Refrescar</button>
+        <button class="btn-primary" id="runBtn">Rotar ahora</button>
+      </div>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+    <div class="empty hidden" id="galleryEmpty">No hay imágenes cargadas todavía.</div>
+
+    <div class="drop" id="dropZone">
+      Arrastrá imágenes acá o hacé clic para subir &middot; 2048×1152 px recomendado, máx 6 MB
+      <input type="file" id="fileInput" accept="image/*" multiple class="hidden" />
+    </div>
+
+    <div class="console" id="console"></div>
+
+    <div class="hint">
+      El rotador elige la <strong>siguiente</strong> imagen del set (orden alfabético, circular) y la pone
+      como banner del canal. El cron solo corre si <code>ROTATOR_ENABLED=true</code>.
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let TOKEN = localStorage.getItem("ciclico_token") || "";
+
+  async function api(path, opts = {}) {
+    const res = await fetch(path, { ...opts, headers: { Authorization: "Bearer " + TOKEN, ...(opts.headers || {}) } });
+    if (res.status === 401) throw new Error("401");
+    return res;
+  }
+
+  function logLine(msg, cls = "") {
+    const c = $("console");
+    const ts = new Date().toLocaleTimeString("es-AR");
+    c.innerHTML += `<div><span class="ts">${ts}</span> <span class="${cls}">${msg}</span></div>`;
+    c.scrollTop = c.scrollHeight;
+  }
+
+  async function tryLogin(token) {
+    TOKEN = token;
+    const res = await fetch("/api/scripts", { headers: { Authorization: "Bearer " + token } });
+    if (!res.ok) throw new Error("Token inválido");
+    localStorage.setItem("ciclico_token", token);
+  }
+
+  $("loginBtn").onclick = async () => {
+    const t = $("tokenInput").value.trim();
+    if (!t) return;
+    try { await tryLogin(t); showDashboard(); }
+    catch { $("loginErr").classList.remove("hidden"); $("loginErr").innerHTML = '<span class="err">Token inválido.</span>'; }
+  };
+  $("tokenInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("loginBtn").click(); });
+  $("logoutBtn").onclick = () => { localStorage.removeItem("ciclico_token"); TOKEN = ""; location.reload(); };
+
+  function showDashboard() {
+    $("loginView").classList.add("hidden");
+    $("dashView").classList.remove("hidden");
+    $("logoutBtn").classList.remove("hidden");
+    loadScripts();
+  }
+
+  async function loadScripts() {
+    const res = await api("/api/scripts");
+    const { scripts } = await res.json();
+    const grid = $("scriptsGrid");
+    grid.innerHTML = "";
+    scripts.forEach((s) => {
+      const card = document.createElement("div");
+      card.className = "script-card";
+      card.innerHTML = `
+        <div class="name">${s.name}</div>
+        <div class="desc">${s.description}</div>
+        <span class="badge ${s.scheduled ? "cron" : ""}">${s.scheduled ? "programado" : "manual"}</span>`;
+      card.onclick = () => {
+        document.querySelectorAll(".script-card").forEach((c) => c.classList.remove("active"));
+        card.classList.add("active");
+        if (s.id === "banner-rotator") openRotator();
+      };
+      grid.appendChild(card);
+    });
+  }
+
+  function openRotator() {
+    $("rotatorPanel").classList.remove("hidden");
+    $("rotatorPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    loadImages();
+  }
+
+  async function loadImages() {
+    const res = await api("/api/rotator/images");
+    const { images } = await res.json();
+    const g = $("gallery");
+    g.innerHTML = "";
+    $("galleryEmpty").classList.toggle("hidden", images.length > 0);
+    images.forEach((name) => {
+      const el = document.createElement("div");
+      el.className = "thumb";
+      const src = `/api/rotator/image/${encodeURIComponent(name)}?token=${encodeURIComponent(TOKEN)}`;
+      el.innerHTML = `<img src="${src}" alt="${name}" loading="lazy" />
+        <div class="meta"><span>${name}</span><span class="del" title="Borrar">✕</span></div>`;
+      el.querySelector(".del").onclick = () => deleteImage(name);
+      g.appendChild(el);
+    });
+  }
+
+  async function deleteImage(name) {
+    if (!confirm(`¿Borrar ${name}?`)) return;
+    await api("/api/rotator/images/" + encodeURIComponent(name), { method: "DELETE" });
+    logLine(`Imagen borrada: ${name}`);
+    loadImages();
+  }
+
+  async function uploadFiles(files) {
+    for (const file of files) {
+      const fd = new FormData();
+      fd.append("file", file);
+      logLine(`Subiendo ${file.name}…`);
+      const res = await api("/api/rotator/images", { method: "POST", body: fd });
+      const data = await res.json();
+      logLine(data.ok ? `Subida: ${data.key}` : `Error: ${data.error}`, data.ok ? "ok" : "err");
+    }
+    loadImages();
+  }
+
+  $("runBtn").onclick = async () => {
+    $("runBtn").disabled = true;
+    logLine("Ejecutando rotador…");
+    try {
+      const res = await api("/api/scripts/banner-rotator/run", { method: "POST" });
+      const data = await res.json();
+      const r = data.result || {};
+      logLine(r.message || data.error || "Sin respuesta", r.ok ? "ok" : "err");
+    } catch (e) { logLine("Error: " + e.message, "err"); }
+    $("runBtn").disabled = false;
+  };
+  $("refreshBtn").onclick = loadImages;
+
+  const dz = $("dropZone");
+  dz.onclick = () => $("fileInput").click();
+  $("fileInput").onchange = (e) => uploadFiles(e.target.files);
+  ["dragover", "dragenter"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove("over"); }));
+  dz.addEventListener("drop", (e) => { if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files); });
+
+  if (TOKEN) {
+    tryLogin(TOKEN).then(showDashboard).catch(() => { localStorage.removeItem("ciclico_token"); TOKEN = ""; });
+  }
+</script>
+</body>
+</html>
