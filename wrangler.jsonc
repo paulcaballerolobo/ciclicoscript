@@ -30,7 +30,7 @@
   // `wrangler secret put` — ver README.
   "vars": {
     "YOUTUBE_CHANNEL_ID": "UC_lnf3whd4UOM0Vnbw-pkeA",
-    "ROTATOR_ENABLED": "false"
+    "ROTATOR_ENABLED": "true"
   },
 
   "observability": {
