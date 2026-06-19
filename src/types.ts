@@ -33,7 +33,10 @@ export type RotateMode = "fixed" | "sequential" | "random";
 /** Grupo de imágenes: lista de substrings de nombre, o palabra clave. */
 export type PoolSpec = string[] | "all" | "rest";
 
-export interface ScheduleDay {
+/** Una franja horaria dentro de un día: rige desde `start` (hora 0-23) hasta
+ *  el `start` de la siguiente franja. */
+export interface ScheduleSegment {
+  start: number;
   mode: RotateMode;
   pool: PoolSpec;
 }
@@ -41,7 +44,8 @@ export interface ScheduleDay {
 export interface Schedule {
   timezone: string;
   avoidRepeat: boolean;
-  days: Record<DayKey, ScheduleDay>;
+  /** Por día, una o más franjas ordenadas por hora de inicio. */
+  days: Record<DayKey, ScheduleSegment[]>;
 }
 
 /** Metadatos + handler de un script ejecutable desde el dashboard. */

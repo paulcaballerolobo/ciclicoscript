@@ -1,4 +1,4 @@
-import type { Env, ScriptResult, Schedule, ScheduleDay, DayKey, PoolSpec } from "../types";
+import type { Env, ScriptResult, Schedule, ScheduleSegment, DayKey, PoolSpec, RotateMode } from "../types";
 import { getAccessToken } from "../lib/google-auth";
 import { setChannelBanner } from "../lib/youtube";
 
@@ -16,14 +16,14 @@ interface RotatorState {
   lastRunAt: string | null;
 }
 
-/** Por defecto: random entre todas, todos los días (funciona sin configurar). */
+/** Por defecto: una sola franja (desde 00:00) random entre todas, todos los días. */
 export const DEFAULT_SCHEDULE: Schedule = {
   timezone: "America/Argentina/Buenos_Aires",
   avoidRepeat: true,
   days: DAY_ORDER.reduce((acc, d) => {
-    acc[d] = { mode: "random", pool: "all" };
+    acc[d] = [{ start: 0, mode: "random", pool: "all" }];
     return acc;
-  }, {} as Record<DayKey, ScheduleDay>),
+  }, {} as Record<DayKey, ScheduleSegment[]>),
 };
 
 /* ------------------------------ helpers ---------------------------- */
@@ -56,15 +56,34 @@ async function writeState(env: Env, state: RotatorState): Promise<void> {
   });
 }
 
+/** Normaliza un día a lista de franjas (migra el formato viejo {mode,pool}). */
+function normalizeDay(value: unknown): ScheduleSegment[] {
+  if (Array.isArray(value) && value.length > 0) {
+    return (value as ScheduleSegment[])
+      .map((s) => ({ start: Number(s.start) || 0, mode: s.mode, pool: s.pool }))
+      .sort((a, b) => a.start - b.start);
+  }
+  // Formato viejo: un solo objeto {mode, pool} → una franja desde 00:00.
+  if (value && typeof value === "object" && "mode" in value) {
+    const v = value as { mode: RotateMode; pool: PoolSpec };
+    return [{ start: 0, mode: v.mode, pool: v.pool }];
+  }
+  return [{ start: 0, mode: "random", pool: "all" }];
+}
+
 export async function getSchedule(env: Env): Promise<Schedule> {
   const obj = await env.BANNERS.get(SCHEDULE_KEY);
   if (!obj) return DEFAULT_SCHEDULE;
   try {
-    const parsed = (await obj.json()) as Partial<Schedule>;
+    const parsed = (await obj.json()) as Partial<Schedule> & { days?: Record<string, unknown> };
+    const days = {} as Record<DayKey, ScheduleSegment[]>;
+    for (const d of DAY_ORDER) {
+      days[d] = normalizeDay(parsed.days?.[d] ?? DEFAULT_SCHEDULE.days[d]);
+    }
     return {
       timezone: parsed.timezone || DEFAULT_SCHEDULE.timezone,
       avoidRepeat: parsed.avoidRepeat ?? true,
-      days: { ...DEFAULT_SCHEDULE.days, ...(parsed.days ?? {}) },
+      days,
     };
   } catch {
     return DEFAULT_SCHEDULE;
@@ -91,21 +110,39 @@ export async function listBannerImages(env: Env): Promise<string[]> {
   return out.sort();
 }
 
-/** Día de la semana (mon..sun) en la zona horaria dada. */
-function weekdayInTz(tz: string): DayKey {
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" })
-    .format(new Date())
-    .toLowerCase()
-    .slice(0, 3);
-  return (DAY_ORDER.find((d) => d === wd) ?? "mon") as DayKey;
+/** Día (mon..sun) y hora (0-23) actuales en la zona horaria dada. */
+function nowInTz(tz: string): { day: DayKey; hour: number } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(new Date());
+  const wd = (parts.find((p) => p.type === "weekday")?.value ?? "Mon").toLowerCase().slice(0, 3);
+  let hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  if (hour === 24) hour = 0; // algunos entornos devuelven '24' a medianoche
+  const day = (DAY_ORDER.find((d) => d === wd) ?? "mon") as DayKey;
+  return { day, hour };
 }
 
-/** Substrings asignados explícitamente en cualquier día (para calcular "resto"). */
+/** Franja activa según la hora: la última cuyo `start` <= hora; si ninguna,
+ *  la última del día (la franja nocturna se extiende hasta la madrugada). */
+function activeSegment(segments: ScheduleSegment[], hour: number): ScheduleSegment {
+  const sorted = [...segments].sort((a, b) => a.start - b.start);
+  let active = sorted[sorted.length - 1];
+  for (const s of sorted) {
+    if (s.start <= hour) active = s;
+  }
+  return active;
+}
+
+/** Substrings asignados explícitamente en cualquier franja (para "resto"). */
 function assignedSubstrings(schedule: Schedule): string[] {
   const subs: string[] = [];
   for (const d of DAY_ORDER) {
-    const p = schedule.days[d]?.pool;
-    if (Array.isArray(p)) subs.push(...p.map((s) => s.toLowerCase()));
+    for (const seg of schedule.days[d] ?? []) {
+      if (Array.isArray(seg.pool)) subs.push(...seg.pool.map((s) => s.toLowerCase()));
+    }
   }
   return subs;
 }
@@ -123,7 +160,7 @@ function resolvePool(images: string[], spec: PoolSpec, assigned: string[]): stri
 /** Elige una imagen del pool según el modo. */
 function pickFromPool(
   pool: string[],
-  mode: ScheduleDay["mode"],
+  mode: RotateMode,
   lastKey: string | null,
   avoidRepeat: boolean
 ): string | null {
@@ -171,8 +208,9 @@ export async function runBannerRotator(
   }
 
   const schedule = await getSchedule(env);
-  const day = weekdayInTz(schedule.timezone);
-  const rule = schedule.days[day] ?? { mode: "random", pool: "all" };
+  const { day, hour } = nowInTz(schedule.timezone);
+  const segments = schedule.days[day] ?? DEFAULT_SCHEDULE.days[day];
+  const rule = activeSegment(segments, hour);
   const state = await readState(env);
 
   // Resolver el pool del día; si queda vacío, caer a todas las imágenes.
@@ -205,9 +243,12 @@ export async function runBannerRotator(
   await writeState(env, { lastKey: nextKey, lastRunAt: startedAt });
 
   const imageName = nextKey.slice(BANNER_PREFIX.length);
-  return finish(true, `[${day} · ${rule.mode}${poolNote}] banner → ${imageName}`, {
+  const hh = String(rule.start).padStart(2, "0");
+  return finish(true, `[${day} ${hour}h · franja ${hh}:00 · ${rule.mode}${poolNote}] banner → ${imageName}`, {
     image: imageName,
     day,
+    hour,
+    segmentStart: rule.start,
     mode: rule.mode,
     poolSize: pool.length,
     bannerUrl,

@@ -158,14 +158,21 @@
   /* calendario */
   .repeat-toggle { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); cursor: pointer; }
   .repeat-toggle input { width: auto; }
-  .sched-grid { display: flex; flex-direction: column; gap: 8px; }
-  .sched-day {
-    display: grid; grid-template-columns: 70px 130px 1fr; gap: 12px; align-items: center;
-    background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
-  }
-  .sched-day .dname { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 14px; }
-  .sched-day select { width: 100%; }
-  .pool-wrap { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .sched-grid { display: flex; flex-direction: column; gap: 10px; }
+  .sched-day-card { background: var(--bg-card2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .sday-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .sday-head .dname { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 14px; }
+  .add-seg { background: none; border: 1px dashed var(--border); color: var(--muted); font-family: 'Inter', sans-serif;
+    font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .add-seg:hover { border-color: var(--orange); color: var(--orange-ink); }
+  .segs { display: flex; flex-direction: column; gap: 8px; }
+  .seg-row { display: grid; grid-template-columns: auto 92px 130px auto 1fr auto; gap: 8px; align-items: center; }
+  .seg-row .seg-from { font-size: 12px; color: var(--muted); }
+  .seg-row select { width: 100%; padding: 8px 10px; }
+  .seg-row .chips-wrap { grid-column: 1 / -1; }
+  .del-seg { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px;
+    width: 28px; height: 28px; cursor: pointer; transition: all 0.15s; }
+  .del-seg:hover { border-color: var(--red); color: var(--red); }
   .pool-type { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .pool-type button {
     background: none; border: none; color: var(--muted); font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 600;
@@ -364,62 +371,94 @@
     const grid = $("schedGrid");
     grid.innerHTML = "";
     DAYS.forEach(([key, label]) => {
-      if (!schedState.days[key]) schedState.days[key] = { mode: "random", pool: "all" };
-      const day = schedState.days[key];
-      const poolType = Array.isArray(day.pool) ? "specific" : day.pool;
+      if (!Array.isArray(schedState.days[key]) || schedState.days[key].length === 0)
+        schedState.days[key] = [{ start: 0, mode: "random", pool: "all" }];
+      const card = document.createElement("div");
+      card.className = "sched-day-card";
+      card.innerHTML = `
+        <div class="sday-head">
+          <span class="dname">${label}</span>
+          <button class="add-seg">+ franja</button>
+        </div>
+        <div class="segs"></div>`;
+      grid.appendChild(card);
+      const segsWrap = card.querySelector(".segs");
+      card.querySelector(".add-seg").onclick = () => {
+        schedState.days[key].push({ start: 13, mode: "random", pool: "all" });
+        renderSegs(key, segsWrap);
+      };
+      renderSegs(key, segsWrap);
+    });
+  }
+
+  function renderSegs(key, wrap) {
+    const segs = schedState.days[key];
+    wrap.innerHTML = "";
+    const hourOpts = Array.from({ length: 24 }, (_, h) =>
+      `<option value="${h}">${String(h).padStart(2, "0")}:00</option>`).join("");
+    segs.forEach((seg, idx) => {
       const row = document.createElement("div");
-      row.className = "sched-day";
+      row.className = "seg-row";
       row.innerHTML = `
-        <div class="dname">${label}</div>
+        <span class="seg-from">Desde</span>
+        <select class="start-sel">${hourOpts}</select>
         <select class="mode-sel">
           <option value="fixed">Fijo</option>
           <option value="sequential">Secuencial</option>
           <option value="random">Random</option>
         </select>
-        <div class="pool-wrap">
-          <div class="pool-type">
-            <button data-t="all">Todas</button>
-            <button data-t="rest">Resto</button>
-            <button data-t="specific">Específicas</button>
-          </div>
-          <div class="chips-wrap"></div>
-        </div>`;
-      grid.appendChild(row);
+        <div class="pool-type">
+          <button data-t="all">Todas</button>
+          <button data-t="rest">Resto</button>
+          <button data-t="specific">Específicas</button>
+        </div>
+        <button class="del-seg" title="Quitar franja">✕</button>
+        <div class="chips-wrap"></div>`;
+      wrap.appendChild(row);
+
+      const startSel = row.querySelector(".start-sel");
+      startSel.value = String(seg.start);
+      startSel.onchange = (e) => { seg.start = Number(e.target.value); };
 
       const modeSel = row.querySelector(".mode-sel");
-      modeSel.value = day.mode;
-      modeSel.onchange = (e) => { day.mode = e.target.value; };
+      modeSel.value = seg.mode;
+      modeSel.onchange = (e) => { seg.mode = e.target.value; };
 
+      const poolType = Array.isArray(seg.pool) ? "specific" : seg.pool;
       const ptBtns = row.querySelectorAll(".pool-type button");
       ptBtns.forEach((b) => {
         if (b.dataset.t === poolType) b.classList.add("on");
         b.onclick = () => {
           ptBtns.forEach((x) => x.classList.remove("on"));
           b.classList.add("on");
-          if (b.dataset.t === "all") day.pool = "all";
-          else if (b.dataset.t === "rest") day.pool = "rest";
-          else if (!Array.isArray(day.pool)) day.pool = [];
-          renderChips(key, row);
+          if (b.dataset.t === "all") seg.pool = "all";
+          else if (b.dataset.t === "rest") seg.pool = "rest";
+          else if (!Array.isArray(seg.pool)) seg.pool = [];
+          renderChips(seg, row.querySelector(".chips-wrap"));
         };
       });
-      renderChips(key, row);
+
+      row.querySelector(".del-seg").onclick = () => {
+        if (segs.length <= 1) { logLine("Cada día necesita al menos una franja.", "err"); return; }
+        segs.splice(idx, 1);
+        renderSegs(key, wrap);
+      };
+
+      renderChips(seg, row.querySelector(".chips-wrap"));
     });
   }
 
-  function renderChips(key, row) {
-    const wrap = row.querySelector(".chips-wrap");
-    const pool = schedState.days[key].pool;
+  function renderChips(seg, wrap) {
     wrap.innerHTML = "";
-    if (!Array.isArray(pool)) return;
+    if (!Array.isArray(seg.pool)) return;
     schedImages.forEach((name) => {
       const chip = document.createElement("span");
-      chip.className = "chip" + (pool.includes(name) ? " on" : "");
+      chip.className = "chip" + (seg.pool.includes(name) ? " on" : "");
       chip.textContent = shortName(name);
       chip.title = name;
       chip.onclick = () => {
-        const arr = schedState.days[key].pool;
-        const i = arr.indexOf(name);
-        if (i >= 0) arr.splice(i, 1); else arr.push(name);
+        const i = seg.pool.indexOf(name);
+        if (i >= 0) seg.pool.splice(i, 1); else seg.pool.push(name);
         chip.classList.toggle("on");
       };
       wrap.appendChild(chip);
