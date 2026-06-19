@@ -20,11 +20,11 @@
     }
   ],
 
-  // Tareas programadas. El rotador corre cada 2 horas; el calendario interno
-  // (editable desde el dashboard) decide qué imagen poner según el día.
-  // Para acotar a ciertas horas, cambiá la expresión (ej. "0 8-22/2 * * *").
+  // Tareas programadas. El rotador corre cada hora (en punto), así las horas
+  // de inicio de franja del calendario se respetan con precisión horaria.
+  // El calendario interno (editable desde el dashboard) decide qué poner.
   "triggers": {
-    "crons": ["0 */2 * * *"]
+    "crons": ["0 * * * *"]
   },
 
   // Variables públicas (NO secretos). Los secretos se cargan con
